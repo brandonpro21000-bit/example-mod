@@ -19,8 +19,7 @@ bool saltoEsMortal(PlayLayer* pl, PlayerObject* player) {
     const float pasosX[] = { 18.0f, 38.0f, 60.0f };
     const float pasosY[] = { 15.0f, 32.0f, 44.0f };
 
-    CCArray* objetos = pl->m_objects;
-    if (!objetos) return false;
+    if (!pl->m_objects) return false;
 
     for (int p = 0; p < 3; ++p) {
         float futX = posActual.x + pasosX[p];
@@ -28,8 +27,7 @@ bool saltoEsMortal(PlayLayer* pl, PlayerObject* player) {
         
         CCRect hitboxFutura(futX - 12.0f, futY - 12.0f, 24.0f, 24.0f);
 
-        for (unsigned int i = 0; i < objetos->count(); ++i) {
-            auto obj = static_cast<GameObject*>(objetos->objectAtIndex(i));
+        for (auto* obj : CCArrayExt<GameObject*>(pl->m_objects)) {
             if (!obj) continue;
 
             if (std::abs(obj->getPositionX() - futX) > 90.0f) continue;
