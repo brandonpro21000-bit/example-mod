@@ -6,12 +6,29 @@
 		"mac": "2.2081",
 		"ios": "2.2081"
 	},
-	"id": "$MOD_ID",
-	"name": "$MOD_NAME",
-	"version": "$MOD_VERSION",
-	"developer": "$MOD_DEVELOPER",
-	"description": "$MOD_DESCRIPTION",
-	"dependencies": {
-		"geode.node-ids": ">=v1.23.3"
+	"id": "brandon.click_corrector",
+	"name": "Click Corrector",
+	"version": "v1.0.0",
+	"developer": "Brandon",
+	"description": "Retrasa clics tempranos hasta 15 frames para entrenar timings.",
+	"settings": {
+		"mod-activo": {
+			"name": "Activar Corrector de Clics",
+			"description": "Activa o desactiva la retencion de clics tempranos.",
+			"type": "bool",
+			"default": true
+		},
+		"max-frames": {
+			"name": "Frames de ayuda (Maximo 15)",
+			"description": "Cantidad maxima de frames que el mod puede retrasar un clic temprano (0 = desactivado).",
+			"type": "int",
+			"default": 8,
+			"min": 0,
+			"max": 15,
+			"control": {
+				"slider": true,
+				"input": true
+			}
+		}
 	}
 }
