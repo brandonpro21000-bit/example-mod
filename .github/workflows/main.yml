@@ -1,0 +1,12 @@
+name: Build Geode Mod
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build Mod
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          combine: true
