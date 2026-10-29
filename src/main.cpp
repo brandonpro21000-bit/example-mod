@@ -1,100 +1,137 @@
-/**
- * Include the Geode headers.
- */
 #include <Geode/Geode.hpp>
+#include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/GJBaseGameLayer.hpp>
+#include <Geode/modify/PauseLayer.hpp>
+#include <Geode/ui/GeodeUI.hpp>
 
-/**
- * Brings cocos2d and all Geode namespaces to the current scope.
- */
 using namespace geode::prelude;
 
-/**
- * `$modify` lets you extend and modify GD's classes.
- * To hook a function in Geode, simply $modify the class
- * and write a new function definition with the signature of
- * the function you want to hook.
- *
- * Here we use the overloaded `$modify` macro to set our own class name,
- * so that we can use it for button callbacks.
- *
- * Notice the header being included, you *must* include the header for
- * the class you are modifying, or you will get a compile error.
- *
- * Another way you could do this is like this:
- *
- * struct MyMenuLayer : Modify<MyMenuLayer, MenuLayer> {};
- */
-#include <Geode/modify/MenuLayer.hpp>
-class $modify(MyMenuLayer, MenuLayer) {
-	/**
-	 * Typically classes in GD are initialized using the `init` function, (though not always!),
-	 * so here we use it to add our own button to the bottom menu.
-	 *
-	 * Note that for all hooks, your signature has to *match exactly*,
-	 * `void init()` would not place a hook!
-	*/
-	bool init() {
-		/**
-		 * We call the original init function so that the
-		 * original class is properly initialized.
-		 */
-		if (!MenuLayer::init()) {
-			return false;
-		}
+bool g_clickRetenido = false;
+int g_framesEsperados = 0;
+bool g_enviandoClickCorregido = false;
 
-		/**
-		 * You can use methods from the `geode::log` namespace to log messages to the console,
-		 * being useful for debugging and such. See this page for more info about logging:
-		 * https://docs.geode-sdk.org/tutorials/logging
-		*/
-		log::debug("Hello from my MenuLayer::init hook! This layer has {} children.", this->getChildrenCount());
+bool saltoEsMortal(PlayLayer* pl, PlayerObject* player) {
+    if (!pl || !player) return false;
 
-		/**
-		 * See this page for more info about buttons
-		 * https://docs.geode-sdk.org/tutorials/buttons
-		*/
-		auto myButton = CCMenuItemSpriteExtra::create(
-			CCSprite::createWithSpriteFrameName("GJ_likeBtn_001.png"),
-			this,
-			/**
-			 * Here we use the name we set earlier for our modify class.
-			*/
-			menu_selector(MyMenuLayer::onMyButton)
-		);
+    CCPoint posActual = player->getPosition();
+    float gravedadDir = player->m_isUpsideDown ? -1.0f : 1.0f;
 
-		/**
-		 * Here we access the `bottom-menu` node by its ID, and add our button to it.
-		 * Node IDs are a Geode feature, see this page for more info about it:
-		 * https://docs.geode-sdk.org/tutorials/nodetree
-		*/
-		auto menu = this->getChildByID("bottom-menu");
-		menu->addChild(myButton);
+    const float pasosX[] = { 18.0f, 38.0f, 60.0f };
+    const float pasosY[] = { 15.0f, 32.0f, 44.0f };
 
-		/**
-		 * The `_spr` string literal operator just prefixes the string with
-		 * your mod id followed by a slash. This is good practice for setting your own node ids.
-		*/
-		myButton->setID("my-button"_spr);
+    CCArray* objetos = pl->m_objects;
+    if (!objetos) return false;
 
-		/**
-		 * We update the layout of the menu to ensure that our button is properly placed.
-		 * This is yet another Geode feature, see this page for more info about it:
-		 * https://docs.geode-sdk.org/tutorials/layouts
-		*/
-		menu->updateLayout();
+    for (int p = 0; p < 3; ++p) {
+        float futX = posActual.x + pasosX[p];
+        float futY = posActual.y + (pasosY[p] * gravedadDir);
+        
+        CCRect hitboxFutura(futX - 12.0f, futY - 12.0f, 24.0f, 24.0f);
 
-		/**
-		 * We return `true` to indicate that the class was properly initialized.
-		 */
-		return true;
-	}
+        for (unsigned int i = 0; i < objetos->count(); ++i) {
+            auto obj = static_cast<GameObject*>(objetos->objectAtIndex(i));
+            if (!obj) continue;
 
-	/**
-	 * This is the callback function for the button we created earlier.
-	 * The signature for button callbacks must always be the same,
-	 * return type `void` and taking a `CCObject*`.
-	*/
-	void onMyButton(CCObject*) {
-		FLAlertLayer::create("Geode", "Hello from my custom mod!", "OK")->show();
-	}
+            if (std::abs(obj->getPositionX() - futX) > 90.0f) continue;
+
+            if (obj->m_objectType == GameObjectType::Hazard || 
+                obj->m_objectType == GameObjectType::AnimatedHazard) {
+                
+                if (hitboxFutura.intersectsRect(obj->getObjectRect())) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+class $modify(CorrectorInput, GJBaseGameLayer) {
+    void handleButton(bool down, int button, bool isPlayer1) {
+        if (g_enviandoClickCorregido) {
+            GJBaseGameLayer::handleButton(down, button, isPlayer1);
+            return;
+        }
+
+        bool modActivo = Mod::get()->getSettingValue<bool>("mod-activo");
+        int maxFramesAyuda = static_cast<int>(Mod::get()->getSettingValue<int64_t>("max-frames"));
+
+        auto pl = PlayLayer::get();
+
+        if (modActivo && maxFramesAyuda > 0 && pl && down && isPlayer1 && button == 1) {
+            if (m_player1 && !m_player1->m_isDead && saltoEsMortal(pl, m_player1)) {
+                g_clickRetenido = true;
+                g_framesEsperados = 0;
+                return;
+            }
+        }
+
+        if (!down && isPlayer1 && button == 1) {
+            g_clickRetenido = false;
+            g_framesEsperados = 0;
+        }
+
+        GJBaseGameLayer::handleButton(down, button, isPlayer1);
+    }
+};
+
+class $modify(CorrectorLoop, PlayLayer) {
+    void postUpdate(float dt) {
+        PlayLayer::postUpdate(dt);
+
+        if (!g_clickRetenido || !m_player1 || m_player1->m_isDead) {
+            return;
+        }
+
+        int maxFramesAyuda = static_cast<int>(Mod::get()->getSettingValue<int64_t>("max-frames"));
+        g_framesEsperados++;
+
+        bool yaEsSeguro = !saltoEsMortal(this, m_player1);
+        bool limiteAlcanzado = (g_framesEsperados >= maxFramesAyuda);
+
+        if (yaEsSeguro || limiteAlcanzado) {
+            g_clickRetenido = false;
+            g_enviandoClickCorregido = true;
+
+            this->handleButton(true, 1, true);
+
+            g_enviandoClickCorregido = false;
+            g_framesEsperados = 0;
+        }
+    }
+
+    void resetLevel() {
+        g_clickRetenido = false;
+        g_framesEsperados = 0;
+        g_enviandoClickCorregido = false;
+        PlayLayer::resetLevel();
+    }
+};
+
+class $modify(MenuPausaCorrector, PauseLayer) {
+    void customSetup() {
+        PauseLayer::customSetup();
+
+        auto leftMenu = this->getChildByID("left-button-menu");
+        if (!leftMenu) return;
+
+        auto spriteBoton = CCSprite::createWithSpriteFrameName("GJ_optionsBtn02_001.png");
+        if (!spriteBoton) return;
+        spriteBoton->setScale(0.8f);
+
+        auto botonConfig = CCMenuItemSpriteExtra::create(
+            spriteBoton,
+            this,
+            menu_selector(MenuPausaCorrector::onAbrirConfiguracion)
+        );
+        botonConfig->setID("boton-click-corrector"_spr);
+
+        leftMenu->addChild(botonConfig);
+        leftMenu->updateLayout();
+    }
+
+    void onAbrirConfiguracion(CCObject* sender) {
+        geode::openSettingsPopup(Mod::get());
+    }
 };
